@@ -1,15 +1,16 @@
-# Simulating Generalized Partial Credit Model
+# Simulating from the Generalized Partial Credit Model
 # Polytomous model for ordered responses
 rm(list=ls())
 
 # Model Definition
 GPCM <- function(alpha_i,betas_ij,th){
-  # Returns category probabilities, information, and other relevant
+  # Returns response probabilities, category and item information, and other relevant
   # quantities per ITEM (detailed by CATEGORY), according to the 
   # Generalized Partial Credit Model.
+  
   # 'alpha_i' is a scalar at ITEM level
   # 'beta_ij' is an array at CATEGORY level
-  # 'th' is the value in the latent trait at which evaluate
+  # 'th' is the value in the latent trait at which to evaluate
   # performance of item i and categories ij
   
   # th <- 0
@@ -21,7 +22,7 @@ GPCM <- function(alpha_i,betas_ij,th){
   I_ij <- array(dim=n_cat) # Category information
   category_attractions <- 1 # Category "attraction"
   
-  for(b in 1:length(betas)){ # b indexes *positions* in array...
+  for(b in 1:length(betas_ij)){ # b indexes *positions* in array...
     # ...starting in second category, second position, which is j=1, etc.
     pos <- b+1
     category_attractions[pos] <- exp(alpha_i*(b*th-sum(betas_ij[1:b])))
@@ -45,8 +46,8 @@ GPCM(alpha_i = 2,betas_ij = seq(-2,2,length.out=3),th = 0)
 
 theta <- seq(-10,10,.1)
 # At item level...
-betas <- seq(-2,2,length.out=3)
-alpha <- 1
+betas <- seq(-2,2,length.out=2)
+alpha <- 3
 
 n_cat <- length(betas)+1
 # theta <- 1
@@ -72,7 +73,7 @@ plot(NULL,xlim=c(-10,10),ylim=c(0,1))
 for(cc in 1:n_cat){
   lines(theta,f_ij[cc,],col=cat_cols[cc],lwd=2)
 }
-lines(theta,e_y_th/length(betas),lwd=2.5)
+lines(theta,E_Y/length(betas),lwd=2.5)
 plot(NULL,xlim=c(-10,10),ylim=c(0,0.5))
 for(cc in 1:(length(betas)+1)){
   lines(theta,I_ij[cc,],col=cat_cols[cc],lwd=2)
@@ -82,11 +83,13 @@ lines(theta,I_i,lwd=2.5)
 
 
 
+
+
 # Simulation(s)
 
 # Totals
 n_items <- 20
-n_categories <- 5
+n_categories <- 3
 n_persons <- 100
 
 # Person parameters
@@ -94,12 +97,68 @@ set.seed(123)
 true_theta <- rnorm(n=n_persons)
 
 # Item parameters
+true_alpha <- rep(3,n_items)
 true_beta <- array(dim=c(n_items,n_categories-1))
-base <- c(-1.5,-.5,.5,1.5) # Different ways to simulate betas
+# base <- c(-1.5,-.5,.5,1.5) # Different ways to simulate betas
+base <- c(-1,1) # Different ways to simulate betas
 for(b in 1:n_items){
-  true_beta[b,] <- base+rnorm(length(base),sd=0.3)
+  true_beta[b,] <- base+rnorm(length(base),sd=0.5)
   # true_beta[b,] <- sort(rnorm(n=n_categories-1))
 }
+
+# Category parameters
+j <- 0:(n_categories-1)
+
+# Responses simulation
+responses <- array(dim=c(n_persons,n_items))
+for(p in 1:n_persons){
+  for(i in 1:n_items){
+    gpcm <- GPCM(alpha_i = true_alpha[i],
+               betas_ij = true_beta[i,],
+               th = true_theta[p])
+    responses[p,i] <- sample(j,size=1,prob = gpcm$f_ij)
+  }
+}
+
+simulation <- list(responses=responses,
+                   true_theta=true_theta,
+                   true_alpha=true_alpha,
+                   true_beta=true_beta,
+                   j=j,n_persons=n_persons,
+                   n_items=n_items,n_categories=n_categories,
+                   model_description='GPCM') # Still not sure how to pass the whole model here
+setwd('~/Learning/Psychometrics/IRT simulation and recovery/')
+save(simulation,file='simul_GPCM.RData')
+
+
+
+
+
+# Towards more plotting functions...
+
+# Plotting observed responses
+y <- simulation$responses
+j <- simulation$j
+n_categories <- length(j)
+# y <- responses
+# n_categories <- 3
+# j <- 0:(n_categories-1)
+n_persons <- nrow(y)
+n_items <- ncol(y)
+cat_colors <-  c('#edf8fb','#b3cde3','#8c96c6','#8856a7','#810f7c')[c(1,3,5)]
+ord_pers <- order(apply(y,FUN=sum,MARGIN=1))
+ord_items <- order(apply(y,FUN=sum,MARGIN=2))
+y_ord <- y[ord_pers,ord_items]
+plot(NULL,xlim=c(1,n_items),ylim=c(1,n_persons))
+for(p in 1:n_persons){
+  for(i in 1:n_items){
+    col <- which(j==y_ord[p,i])
+    polygon(x=c(i+0.5,i-0.5,i-0.5,i+0.5),
+            y=rep(c(p-0.5,p+0.5),each=2),
+            col=cat_colors[col])
+  }
+}
+
 
 
 # Plotting true unobservables
@@ -110,6 +169,9 @@ for(b in 1:n_items){
   points(true_beta[b,],rep(b,n_categories-1))
 }
 points(true_theta,rep(n_items+1,n_persons),col='red')
+
+
+
 
 
 
